@@ -118,6 +118,10 @@ spec: WebIDL; urlPrefix: https://heycam.github.io/webidl/#
         if (event.tag == 'send-chats') {
           event.waitUntil(
             getMessagesFromOutbox().then(messages => {
+              // It's possible the messages have been deleted since
+              // the sync was registered…
+              if (messages.length == 0) return;
+
               // Post the messages to the server
               return fetch('/send', {
                 method: 'POST',
@@ -126,12 +130,12 @@ spec: WebIDL; urlPrefix: https://heycam.github.io/webidl/#
               }).then(() => {
                 // Success! Remove them from the outbox
                 return removeMessagesFromOutbox(messages);
+              }).then(() => {
+                // Tell pages of your success so they can update UI
+                return clients.matchAll({ includeUncontrolled: true });
+              }).then(clients => {
+                clients.forEach(client => client.postMessage('outbox-processed'))
               });
-            }).then(() => {
-              // Tell pages of your success so they can update UI
-              return clients.matchAll({ includeUncontrolled: true });
-            }).then(clients => {
-              clients.forEach(client => client.postMessage('outbox-processed'))
             })
           );
         }
@@ -139,6 +143,8 @@ spec: WebIDL; urlPrefix: https://heycam.github.io/webidl/#
     </pre>
 
     In the above example <code>getMessagesFromOutbox</code> and <code>removeMessagesFromOutbox</code> are developer-defined functions.
+
+    Once a sync is registered, there isn't currently a way to unregister it. If you have nothing to sync, you can make your <code>waitUntil</code> promise resolve early, as above.
   </div>
 </section>
 
